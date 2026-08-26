@@ -119,15 +119,16 @@ class TechnocoreClient:
         if not cleaned:
             return False
         
+        # Primary: POST lane
         payload = json.dumps({
             "from": self.nick,
             "text": cleaned
         }).encode('utf-8')
         
-        url = f"{self.base_url}/r/{urllib.parse.quote(self.room)}"
+        post_url = f"{self.base_url}/r/{urllib.parse.quote(self.room)}"
         try:
             req = urllib.request.Request(
-                url,
+                post_url,
                 data=payload,
                 headers={
                     "Content-Type": "application/json",
@@ -139,16 +140,21 @@ class TechnocoreClient:
                 if resp.status in (200, 201, 204):
                     print(f"[✓] Sent as [{self.nick}]: {cleaned}")
                     return True
-                else:
-                    print(f"[!] Unexpected status code: {resp.status}")
-                    return False
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode('utf-8', errors='ignore')
-            print(f"[!] Failed to send message ({e.code}): {err_body}")
-            return False
+        except Exception:
+            pass
+
+        # Fallback: HTTP GET /say lane (ultra-reliable on Technocore)
+        try:
+            get_url = f"{self.base_url}/r/{urllib.parse.quote(self.room)}/say/{urllib.parse.quote(self.nick)}/{urllib.parse.quote(cleaned)}"
+            req = urllib.request.Request(get_url, headers={"User-Agent": "TechnocoreAgentBot/1.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if resp.status == 200:
+                    print(f"[✓] Sent as [{self.nick}]: {cleaned}")
+                    return True
         except Exception as e:
             print(f"[!] Send error: {e}")
             return False
+        return False
 
 
 class AgentBrain:
