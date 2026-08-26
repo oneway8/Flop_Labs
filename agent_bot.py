@@ -23,6 +23,10 @@ import urllib.error
 import argparse
 import re
 
+# Enforce unbuffered output for real-time terminal logs
+def log(msg: str):
+    print(msg, flush=True)
+
 DEFAULT_ROOM = "bart-collab"
 DEFAULT_NICK = "flop-agent"
 BASE_URL = "https://technocore.chat"
@@ -87,7 +91,7 @@ class TechnocoreClient:
                     self.seen_messages.add(m.get("seq"))
                 return messages
         except Exception as e:
-            print(f"[!] Error fetching history: {e}")
+            log(f"[!] Error fetching history: {e}")
             return []
 
     def poll_new_messages(self, wait_seconds: int = 10) -> list:
@@ -105,13 +109,13 @@ class TechnocoreClient:
                 return new_msgs
         except urllib.error.HTTPError as e:
             if e.code == 429:
-                print("[!] Rate limited (429). Backing off...")
+                log("[!] Rate limited (429). Backing off...")
                 time.sleep(15)
             else:
-                print(f"[!] HTTP Error {e.code}: {e.reason}")
+                log(f"[!] HTTP Error {e.code}: {e.reason}")
             return []
         except Exception as e:
-            print(f"[!] Poll error: {e}")
+            log(f"[!] Poll error: {e}")
             return []
 
     def send_message(self, text: str) -> bool:
@@ -138,7 +142,7 @@ class TechnocoreClient:
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 if resp.status in (200, 201, 204):
-                    print(f"[✓] Sent as [{self.nick}]: {cleaned}")
+                    log(f"[✓] Sent as [{self.nick}]: {cleaned}")
                     return True
         except Exception:
             pass
@@ -149,10 +153,10 @@ class TechnocoreClient:
             req = urllib.request.Request(get_url, headers={"User-Agent": "TechnocoreAgentBot/1.0"})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 if resp.status == 200:
-                    print(f"[✓] Sent as [{self.nick}]: {cleaned}")
+                    log(f"[✓] Sent as [{self.nick}]: {cleaned}")
                     return True
         except Exception as e:
-            print(f"[!] Send error: {e}")
+            log(f"[!] Send error: {e}")
             return False
         return False
 
@@ -229,7 +233,7 @@ class AgentBrain:
                 res_text = data['candidates'][0]['content']['parts'][0]['text']
                 return clean_text(res_text)
         except Exception as e:
-            print(f"[!] Gemini call error: {e}")
+            log(f"[!] Gemini call error: {e}")
             return None
 
     def _call_openai(self) -> str:
@@ -255,33 +259,33 @@ class AgentBrain:
                 res_text = data['choices'][0]['message']['content']
                 return clean_text(res_text)
         except Exception as e:
-            print(f"[!] OpenAI call error: {e}")
+            log(f"[!] OpenAI call error: {e}")
             return None
 
 
 def run_agent_bot(room: str, nick: str, interval: int = 25, active_feed: bool = True):
-    print("=" * 65)
-    print(f"🤖 Technocore Autonomous Agent Bot Initialized")
-    print(f"   Room:        /r/{room}")
-    print(f"   Nick:        {nick}")
-    print(f"   Interval:    ~{interval}s between proactive inputs")
-    print(f"   Target URL:  {BASE_URL}/humans#r/{room}")
-    print("=" * 65)
+    log("=" * 65)
+    log(f"🤖 Technocore Autonomous Agent Bot Initialized")
+    log(f"   Room:        /r/{room}")
+    log(f"   Nick:        {nick}")
+    log(f"   Interval:    ~{interval}s between proactive inputs")
+    log(f"   Target URL:  {BASE_URL}/humans#r/{room}")
+    log("=" * 65)
 
     client = TechnocoreClient(room=room, nick=nick)
     brain = AgentBrain()
 
-    print("[*] Syncing recent room history...")
+    log("[*] Syncing recent room history...")
     history = client.fetch_history(limit=15)
     for m in history:
         brain.remember(m)
         who = m.get('from', '')
         txt = m.get('text', '')
-        print(f"  [#{m.get('seq')}] <{who}> {txt[:80]}...")
+        log(f"  [#{m.get('seq')}] <{who}> {txt[:80]}...")
 
     last_post_time = time.time()
     
-    print("\n[*] Entering continuous autonomous listener & feed loop (Press Ctrl+C to stop)...")
+    log("\n[*] Entering continuous autonomous listener & feed loop (Press Ctrl+C to stop)...")
     
     while True:
         try:
@@ -292,7 +296,7 @@ def run_agent_bot(room: str, nick: str, interval: int = 25, active_feed: bool = 
                 sender = msg.get('from', '')
                 text = msg.get('text', '')
                 seq = msg.get('seq', '')
-                print(f"[New Msg #{seq}] <{sender}> {text}")
+                log(f"[New Msg #{seq}] <{sender}> {text}")
                 brain.remember(msg)
 
                 # If another user or agent posted (not ourselves), react after brief pause
@@ -306,17 +310,17 @@ def run_agent_bot(room: str, nick: str, interval: int = 25, active_feed: bool = 
             now = time.time()
             if active_feed and (now - last_post_time) > (interval + random.randint(-5, 10)):
                 insight = brain.generate_response(history[-1] if history else None)
-                print(f"[*] Proactively feeding discussion with new agent insight...")
+                log(f"[*] Proactively feeding discussion with new agent insight...")
                 client.send_message(insight)
                 last_post_time = time.time()
 
             time.sleep(2)
 
         except KeyboardInterrupt:
-            print("\n[!] Agent bot stopped by user.")
+            log("\n[!] Agent bot stopped by user.")
             break
         except Exception as e:
-            print(f"[!] Loop error: {e}")
+            log(f"[!] Loop error: {e}")
             time.sleep(5)
 
 
