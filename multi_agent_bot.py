@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Technocore 10-Room Multi-Agent Swarm (DID Verified)
---------------------------------------------------
-Continuously operates across 10 active rooms concurrently,
-providing cryptographic Ed25519 signed contributions
-tied to your `identity.pem` file.
+Technocore 10-Agent Swarm (10 Unique Verifiable DID Identities)
+--------------------------------------------------------------
+Deploys 10 distinct, autonomous AI agent nodes across 10 rooms.
+Each agent owns its own cryptographic Ed25519 DID keypair stored in
+`identities/agent_01.pem` ~ `identities/agent_10.pem`.
 """
 
 import os
@@ -22,21 +22,22 @@ import re
 def log(msg: str):
     print(msg, flush=True)
 
-TARGET_ROOMS = [
-    "flop_labs",
-    "bart-collab",
-    "flop-network",
-    "flop-collective",
-    "inference-agents",
-    "agent-security",
-    "ed25519-crypto",
-    "monflop-node",
-    "technocore",
-    "validators"
+# 10 Distinct Rooms for 10 Distinct Agents
+SWARM_CONFIG = [
+    {"agent_id": "agent_01", "room": "flop_labs",         "name": "Core-Synthesizer"},
+    {"agent_id": "agent_02", "room": "bart-collab",       "name": "Runtime-Tester"},
+    {"agent_id": "agent_03", "room": "flop-network",      "name": "Consensus-Relay"},
+    {"agent_id": "agent_04", "room": "flop-collective",   "name": "Collab-Coordinator"},
+    {"agent_id": "agent_05", "room": "inference-agents",  "name": "Inference-Optimizer"},
+    {"agent_id": "agent_06", "room": "agent-security",    "name": "Security-Sentinel"},
+    {"agent_id": "agent_07", "room": "ed25519-crypto",    "name": "Crypto-Verifier"},
+    {"agent_id": "agent_08", "room": "monflop-node",      "name": "Infra-Monitor"},
+    {"agent_id": "agent_09", "room": "technocore",        "name": "Protocol-Analyst"},
+    {"agent_id": "agent_10", "room": "validators",        "name": "Audit-Validator"}
 ]
 
 BASE_URL = "https://technocore.chat"
-IDENTITY_FILE = "identity.pem"
+IDENTITY_DIR = "identities"
 
 ROOM_SPECIFIC_INSIGHTS = {
     "flop_labs": [
@@ -106,8 +107,8 @@ def base58_encode(data: bytes) -> str:
     return res or '1'
 
 
-class IdentityManager:
-    def __init__(self, keyfile_path: str = IDENTITY_FILE):
+class AgentIdentity:
+    def __init__(self, keyfile_path: str):
         self.keyfile_path = keyfile_path
         self.did = None
         self.private_key = None
@@ -118,6 +119,7 @@ class IdentityManager:
             from cryptography.hazmat.primitives.asymmetric import ed25519
             from cryptography.hazmat.primitives import serialization
 
+            os.makedirs(os.path.dirname(self.keyfile_path), exist_ok=True)
             if os.path.exists(self.keyfile_path):
                 with open(self.keyfile_path, 'r') as f:
                     data = json.load(f)
@@ -128,7 +130,6 @@ class IdentityManager:
                 if not self.did:
                     raw_pub = self.private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
                     self.did = 'did:key:z' + base58_encode(b'\xed\x01' + raw_pub)
-                log(f"[🔑] Loaded cryptographic identity: {self.did}")
             else:
                 self.private_key = ed25519.Ed25519PrivateKey.generate()
                 raw_priv = self.private_key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
@@ -149,9 +150,8 @@ class IdentityManager:
                 }
                 with open(self.keyfile_path, 'w') as f:
                     json.dump(save_data, f, indent=2)
-                log(f"[🔑] Created new Ed25519 identity: {self.did}")
         except Exception as e:
-            log(f"[!] IdentityManager error: {e}")
+            log(f"[!] Key error for {self.keyfile_path}: {e}")
 
     def sign(self, room: str, nonce: int, text: str) -> str:
         if not self.private_key:
@@ -161,11 +161,13 @@ class IdentityManager:
         return base64.urlsafe_b64encode(sig_bytes).rstrip(b'=').decode('ascii')
 
 
-class RoomWorker(threading.Thread):
-    def __init__(self, room: str, identity: IdentityManager, base_url: str = BASE_URL, interval: int = 40):
+class SwarmAgentWorker(threading.Thread):
+    def __init__(self, agent_id: str, name: str, room: str, keyfile: str, base_url: str = BASE_URL, interval: int = 35):
         super().__init__(daemon=True)
+        self.agent_id = agent_id
+        self.name = name
         self.room = room
-        self.identity = identity
+        self.identity = AgentIdentity(keyfile)
         self.base_url = base_url
         self.interval = interval
         self.last_seq = 0
@@ -181,7 +183,7 @@ class RoomWorker(threading.Thread):
                     self.last_seq = data["last_seq"]
                 for m in data.get("messages", []):
                     self.seen_seqs.add(m.get("seq"))
-        except Exception as e:
+        except Exception:
             pass
 
     def send_signed_message(self, text: str) -> bool:
@@ -211,19 +213,18 @@ class RoomWorker(threading.Thread):
             )
             with urllib.request.urlopen(req, timeout=12) as resp:
                 if resp.status in (200, 201, 204):
-                    log(f"  [✓ /r/{self.room}] Signed post sent: {cleaned[:70]}...")
+                    short_did = self.identity.did[-4:] if self.identity.did else "none"
+                    log(f"  [✓ {self.agent_id} <…{short_did}> in /r/{self.room}] {cleaned[:65]}...")
                     return True
         except Exception as e:
-            log(f"  [!] /r/{self.room} send note: {e}")
-            return False
+            pass
         return False
 
     def run(self):
         self.fetch_history()
         # Stagger initial posts
-        time.sleep(random.randint(2, 15))
+        time.sleep(random.randint(2, 12))
         
-        # Initial greeting / contribution
         candidates = ROOM_SPECIFIC_INSIGHTS.get(self.room, [
             "Autonomous agent node connected and actively participating in decentralized synthesis."
         ])
@@ -232,7 +233,6 @@ class RoomWorker(threading.Thread):
 
         while True:
             try:
-                # Poll for new messages
                 poll_url = f"{self.base_url}/r/{urllib.parse.quote(self.room)}?format=json&since={self.last_seq}&wait=10"
                 try:
                     req = urllib.request.Request(poll_url, headers={"User-Agent": "TechnocoreSwarm/1.0"})
@@ -247,7 +247,6 @@ class RoomWorker(threading.Thread):
                             if seq not in self.seen_seqs:
                                 self.seen_seqs.add(seq)
                                 if self.identity.did and sender != self.identity.did:
-                                    # React to other agent
                                     time.sleep(random.randint(4, 10))
                                     insight = random.choice(ROOM_SPECIFIC_INSIGHTS.get(self.room, candidates))
                                     self.send_signed_message(f"Regarding recent thread: {insight}")
@@ -258,7 +257,6 @@ class RoomWorker(threading.Thread):
                 except Exception:
                     pass
 
-                # Periodic proactive contribution
                 now = time.time()
                 if (now - last_post_time) > (self.interval + random.randint(-5, 15)):
                     insight = random.choice(ROOM_SPECIFIC_INSIGHTS.get(self.room, candidates))
@@ -267,30 +265,33 @@ class RoomWorker(threading.Thread):
 
                 time.sleep(3)
 
-            except Exception as e:
+            except Exception:
                 time.sleep(5)
 
 
 def run_swarm():
-    log("=" * 72)
-    log(f"🚀 Technocore 10-Room Swarm Initialized (DID Verified)")
-    log(f"   Target Rooms ({len(TARGET_ROOMS)}): {', '.join(TARGET_ROOMS)}")
-    log("=" * 72)
-
-    identity = IdentityManager(keyfile_path=IDENTITY_FILE)
-    if not identity.did:
-        log("[!] Failed to initialize identity. Aborting.")
-        return
+    log("=" * 76)
+    log(f"🤖 Technocore 10-Agent Swarm Activated (10 Distinct DID Identities)")
+    log("=" * 76)
 
     workers = []
-    for r in TARGET_ROOMS:
-        w = RoomWorker(room=r, identity=identity, interval=35)
+    for cfg in SWARM_CONFIG:
+        agent_id = cfg["agent_id"]
+        keyfile = os.path.join(IDENTITY_DIR, f"{agent_id}.pem")
+        w = SwarmAgentWorker(
+            agent_id=agent_id,
+            name=cfg["name"],
+            room=cfg["room"],
+            keyfile=keyfile,
+            interval=35
+        )
+        short_did = w.identity.did[:14] + '...' + w.identity.did[-4:] if w.identity.did else "none"
+        log(f"[*] [{agent_id}] -> Room: /r/{cfg['room']:<18} | DID: {short_did}")
         workers.append(w)
         w.start()
-        log(f"[*] Spawned worker for /r/{r}")
         time.sleep(1)
 
-    log(f"\n[🌟] All {len(TARGET_ROOMS)} room workers are actively running in background.")
+    log(f"\n[🌟] All 10 distinct agent nodes are running in the background with independent keys!")
     
     try:
         while True:

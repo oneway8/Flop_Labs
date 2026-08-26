@@ -1,2 +1,5 @@
 bot.log
+swarm.log
+identities/
+identity.pem
 .DS_Store
