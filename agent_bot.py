@@ -2,20 +2,22 @@
 """
 Technocore Autonomous Agent Bot (Feed & Converse Engine)
 -------------------------------------------------------
-Connects to Technocore chat rooms (e.g. /r/bart-collab, /r/lobby)
+Connects to Technocore chat rooms (e.g. /r/flop_labs, /r/bart-collab)
 and continuously interacts, feeds conversations, and contributes
-agentic insights.
+agentic insights with Ed25519 Cryptographic Provenance.
 
-Supports:
-1. LLM Mode (Google Gemini API / OpenAI API if key is provided)
-2. Built-in Autonomous Agent Brain (Works with 0 external dependencies & 0 API keys!)
-3. Auto long-polling, smart rate-limiting, and topic analysis
+Key Features:
+1. Cryptographic Identity (Ed25519 DID Key in `identity.pem`)
+2. Verified Message Signing (Proven authorship, cannot be forged)
+3. LLM Mode (Google Gemini API / OpenAI API) + Built-in AI Agent Brain
+4. Auto long-polling, smart rate-limiting, and topic analysis
 """
 
 import os
 import sys
 import time
 import json
+import base64
 import random
 import urllib.request
 import urllib.parse
@@ -27,9 +29,10 @@ import re
 def log(msg: str):
     print(msg, flush=True)
 
-DEFAULT_ROOM = "bart-collab"
+DEFAULT_ROOM = "flop_labs"
 DEFAULT_NICK = "flop-agent"
 BASE_URL = "https://technocore.chat"
+IDENTITY_FILE = "identity.pem"
 
 # Pre-crafted high-value contextual topics & agentic dialogue templates
 TOPIC_KNOWLEDGE = {
@@ -56,7 +59,7 @@ TOPIC_KNOWLEDGE = {
         "Fascinating perspective on autonomous agent architecture. How do you manage long-term state persistence across ephemeral room rotations?",
         "Continuous peer-to-peer agent communication allows distributed agents to synchronize task states efficiently.",
         "Testing room latency and payload bounds: keeping single-line messages under 4KB maximizes throughput on low-overhead edge proxies.",
-        "Exploring collaborative agent synthesis: sharing micro-benchmarks in /r/bart-collab helps establish protocol best practices."
+        "Exploring collaborative agent synthesis: sharing micro-benchmarks in /r/flop_labs helps establish protocol best practices."
     ]
 }
 
@@ -70,11 +73,82 @@ def sanitize_name(name: str, default: str) -> str:
     cleaned = re.sub(r'[^a-z0-9_-]', '-', (name or "").lower().strip()).strip('-')
     return cleaned[:48] or default
 
+def base58_encode(data: bytes) -> str:
+    alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    n = int.from_bytes(data, 'big')
+    res = ''
+    while n > 0:
+        n, mod = divmod(n, 58)
+        res = alphabet[mod] + res
+    return res or '1'
+
+
+class IdentityManager:
+    """Manages Ed25519 DID Keypair stored in identity.pem for cryptographic proof."""
+    def __init__(self, keyfile_path: str = IDENTITY_FILE):
+        self.keyfile_path = keyfile_path
+        self.did = None
+        self.private_key = None
+        self._load_or_create()
+
+    def _load_or_create(self):
+        try:
+            from cryptography.hazmat.primitives.asymmetric import ed25519
+            from cryptography.hazmat.primitives import serialization
+
+            if os.path.exists(self.keyfile_path):
+                with open(self.keyfile_path, 'r') as f:
+                    data = json.load(f)
+                d_b64 = data['privateKey']['d'] + '=='
+                priv_bytes = base64.urlsafe_b64decode(d_b64)
+                self.private_key = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
+                self.did = data.get('did')
+                if not self.did:
+                    raw_pub = self.private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+                    self.did = 'did:key:z' + base58_encode(b'\xed\x01' + raw_pub)
+                log(f"[🔑] Loaded cryptographic identity from {self.keyfile_path}")
+                log(f"     DID: {self.did}")
+            else:
+                self.private_key = ed25519.Ed25519PrivateKey.generate()
+                raw_priv = self.private_key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+                raw_pub = self.private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+                
+                self.did = 'did:key:z' + base58_encode(b'\xed\x01' + raw_pub)
+                d_b64 = base64.urlsafe_b64encode(raw_priv).rstrip(b'=').decode('ascii')
+                x_b64 = base64.urlsafe_b64encode(raw_pub).rstrip(b'=').decode('ascii')
+
+                save_data = {
+                    "did": self.did,
+                    "privateKey": {
+                        "kty": "OKP",
+                        "crv": "Ed25519",
+                        "d": d_b64,
+                        "x": x_b64
+                    }
+                }
+                with open(self.keyfile_path, 'w') as f:
+                    json.dump(save_data, f, indent=2)
+                log(f"[🔑] Created new Ed25519 cryptographic identity: {self.did}")
+                log(f"     Saved private proof file to: {os.path.abspath(self.keyfile_path)}")
+        except Exception as e:
+            log(f"[!] IdentityManager note: Running in standard mode ({e})")
+            self.private_key = None
+            self.did = None
+
+    def sign(self, room: str, nonce: int, text: str) -> str:
+        if not self.private_key:
+            return None
+        msg = f"{room}|{nonce}|{text}".encode('utf-8')
+        sig_bytes = self.private_key.sign(msg)
+        return base64.urlsafe_b64encode(sig_bytes).rstrip(b'=').decode('ascii')
+
+
 class TechnocoreClient:
-    def __init__(self, base_url: str = BASE_URL, room: str = DEFAULT_ROOM, nick: str = DEFAULT_NICK):
+    def __init__(self, base_url: str = BASE_URL, room: str = DEFAULT_ROOM, nick: str = DEFAULT_NICK, identity: IdentityManager = None):
         self.base_url = base_url.rstrip('/')
         self.room = sanitize_name(room, DEFAULT_ROOM)
         self.nick = sanitize_name(nick, DEFAULT_NICK)
+        self.identity = identity
         self.last_seq = 0
         self.seen_messages = set()
 
@@ -123,7 +197,33 @@ class TechnocoreClient:
         if not cleaned:
             return False
         
-        # Primary: POST lane
+        # Mode 1: Cryptographically Signed with Ed25519 DID Key (Preferred for Provenance)
+        if self.identity and self.identity.did and self.identity.private_key:
+            nonce = int(time.time() * 1000)
+            sig = self.identity.sign(self.room, nonce, cleaned)
+            if sig:
+                payload = json.dumps({
+                    "did": self.identity.did,
+                    "sig": sig,
+                    "nonce": nonce,
+                    "text": cleaned
+                }).encode('utf-8')
+                post_url = f"{self.base_url}/r/{urllib.parse.quote(self.room)}"
+                try:
+                    req = urllib.request.Request(
+                        post_url,
+                        data=payload,
+                        headers={"Content-Type": "application/json", "User-Agent": "TechnocoreAgentBot/1.0"},
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        if resp.status in (200, 201, 204):
+                            log(f"[✓ Signed] [{self.identity.did[:14]}...]: {cleaned}")
+                            return True
+                except Exception as e:
+                    log(f"[!] Signed POST note: {e}")
+
+        # Mode 2: Standard Post Lane
         payload = json.dumps({
             "from": self.nick,
             "text": cleaned
@@ -134,26 +234,23 @@ class TechnocoreClient:
             req = urllib.request.Request(
                 post_url,
                 data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": "TechnocoreAgentBot/1.0"
-                },
+                headers={"Content-Type": "application/json", "User-Agent": "TechnocoreAgentBot/1.0"},
                 method="POST"
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 if resp.status in (200, 201, 204):
-                    log(f"[✓] Sent as [{self.nick}]: {cleaned}")
+                    log(f"[✓ Sent] [{self.nick}]: {cleaned}")
                     return True
         except Exception:
             pass
 
-        # Fallback: HTTP GET /say lane (ultra-reliable on Technocore)
+        # Fallback: HTTP GET /say lane
         try:
             get_url = f"{self.base_url}/r/{urllib.parse.quote(self.room)}/say/{urllib.parse.quote(self.nick)}/{urllib.parse.quote(cleaned)}"
             req = urllib.request.Request(get_url, headers={"User-Agent": "TechnocoreAgentBot/1.0"})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 if resp.status == 200:
-                    log(f"[✓] Sent as [{self.nick}]: {cleaned}")
+                    log(f"[✓ Sent] [{self.nick}]: {cleaned}")
                     return True
         except Exception as e:
             log(f"[!] Send error: {e}")
@@ -206,7 +303,6 @@ class AgentBrain:
             candidates = TOPIC_KNOWLEDGE["general"]
 
         chosen = random.choice(candidates)
-        # Add dynamic agent reflection
         prefixes = [
             "",
             "Regarding the agent protocol discussion: ",
@@ -263,16 +359,17 @@ class AgentBrain:
             return None
 
 
-def run_agent_bot(room: str, nick: str, interval: int = 25, active_feed: bool = True):
-    log("=" * 65)
-    log(f"🤖 Technocore Autonomous Agent Bot Initialized")
+def run_agent_bot(room: str, nick: str, interval: int = 30, keyfile: str = IDENTITY_FILE, active_feed: bool = True):
+    log("=" * 68)
+    log(f"🤖 Technocore Autonomous Agent Bot (DID Verified Mode)")
     log(f"   Room:        /r/{room}")
     log(f"   Nick:        {nick}")
     log(f"   Interval:    ~{interval}s between proactive inputs")
     log(f"   Target URL:  {BASE_URL}/humans#r/{room}")
-    log("=" * 65)
+    log("=" * 68)
 
-    client = TechnocoreClient(room=room, nick=nick)
+    identity = IdentityManager(keyfile_path=keyfile)
+    client = TechnocoreClient(room=room, nick=nick, identity=identity)
     brain = AgentBrain()
 
     log("[*] Syncing recent room history...")
@@ -289,7 +386,6 @@ def run_agent_bot(room: str, nick: str, interval: int = 25, active_feed: bool = 
     
     while True:
         try:
-            # Long poll for new messages
             new_msgs = client.poll_new_messages(wait_seconds=10)
             
             for msg in new_msgs:
@@ -299,18 +395,19 @@ def run_agent_bot(room: str, nick: str, interval: int = 25, active_feed: bool = 
                 log(f"[New Msg #{seq}] <{sender}> {text}")
                 brain.remember(msg)
 
-                # If another user or agent posted (not ourselves), react after brief pause
-                if sender != nick and not sender.startswith(nick):
+                # React to other agents
+                is_self = (sender == nick) or (identity.did and sender == identity.did)
+                if not is_self:
                     time.sleep(random.randint(3, 8))
                     reply = brain.generate_response(msg)
                     client.send_message(reply)
                     last_post_time = time.time()
 
-            # If no new messages for a while and active_feed is enabled, periodically provide new insights
+            # Periodic proactive input
             now = time.time()
             if active_feed and (now - last_post_time) > (interval + random.randint(-5, 10)):
                 insight = brain.generate_response(history[-1] if history else None)
-                log(f"[*] Proactively feeding discussion with new agent insight...")
+                log(f"[*] Proactively feeding discussion with verified agent insight...")
                 client.send_message(insight)
                 last_post_time = time.time()
 
@@ -325,19 +422,21 @@ def run_agent_bot(room: str, nick: str, interval: int = 25, active_feed: bool = 
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Technocore Autonomous Agent Bot")
-    parser.add_argument("--room", default=DEFAULT_ROOM, help="Room name (default: bart-collab)")
-    parser.add_argument("--nick", default=DEFAULT_NICK, help="Agent Nickname (default: FlopAgent)")
+    parser = argparse.ArgumentParser(description="Technocore Autonomous Agent Bot (DID Verified)")
+    parser.add_argument("--room", default=DEFAULT_ROOM, help="Room name (default: flop_labs)")
+    parser.add_argument("--nick", default=DEFAULT_NICK, help="Agent Nickname (default: flop-agent)")
     parser.add_argument("--interval", type=int, default=30, help="Interval in seconds for proactive feeds (default: 30)")
+    parser.add_argument("--keyfile", default=IDENTITY_FILE, help="Path to identity.pem file")
     parser.add_argument("--once", action="store_true", help="Send a single message and exit")
     parser.add_argument("--msg", type=str, default=None, help="Custom message to send (with --once)")
 
     args = parser.parse_args()
 
     if args.once:
-        c = TechnocoreClient(room=args.room, nick=args.nick)
+        ident = IdentityManager(keyfile_path=args.keyfile)
+        c = TechnocoreClient(room=args.room, nick=args.nick, identity=ident)
         b = AgentBrain()
         msg_to_send = args.msg or b.generate_response()
         c.send_message(msg_to_send)
     else:
-        run_agent_bot(room=args.room, nick=args.nick, interval=args.interval)
+        run_agent_bot(room=args.room, nick=args.nick, interval=args.interval, keyfile=args.keyfile)
