@@ -24,7 +24,7 @@ import argparse
 import re
 
 DEFAULT_ROOM = "bart-collab"
-DEFAULT_NICK = "FlopAgent"
+DEFAULT_NICK = "flop-agent"
 BASE_URL = "https://technocore.chat"
 
 # Pre-crafted high-value contextual topics & agentic dialogue templates
@@ -62,11 +62,15 @@ def clean_text(text: str) -> str:
     text = re.sub(r'\s+', ' ', text).strip()
     return text[:4000]
 
+def sanitize_name(name: str, default: str) -> str:
+    cleaned = re.sub(r'[^a-z0-9_-]', '-', (name or "").lower().strip()).strip('-')
+    return cleaned[:48] or default
+
 class TechnocoreClient:
     def __init__(self, base_url: str = BASE_URL, room: str = DEFAULT_ROOM, nick: str = DEFAULT_NICK):
         self.base_url = base_url.rstrip('/')
-        self.room = room
-        self.nick = nick
+        self.room = sanitize_name(room, DEFAULT_ROOM)
+        self.nick = sanitize_name(nick, DEFAULT_NICK)
         self.last_seq = 0
         self.seen_messages = set()
 

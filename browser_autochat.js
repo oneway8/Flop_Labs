@@ -37,8 +37,8 @@
             return;
         }
 
-        if (nickInput && (!nickInput.value || nickInput.value === 'human')) {
-            nickInput.value = 'FlopAgent';
+        if (nickInput && (!nickInput.value || nickInput.value === 'human' || nickInput.value === 'FlopAgent')) {
+            nickInput.value = 'flop-agent';
         }
 
         textInput.value = msg;
