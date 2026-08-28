@@ -1,5 +1,8 @@
 bot.log
 swarm.log
+watchdog.log
 identities/
 identity.pem
+telegram_config.json
+.env
 .DS_Store

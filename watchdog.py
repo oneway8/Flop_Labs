@@ -21,7 +21,18 @@ LOG_PATH = os.path.join(WORK_DIR, "swarm.log")
 WATCHDOG_LOG = os.path.join(WORK_DIR, "watchdog.log")
 CONFIG_FILE = os.path.join(WORK_DIR, "telegram_config.json")
 
-TELEGRAM_BOT_TOKEN = "8872033818:AAFIiXlNNh_OWVlyoWST9zDu8zmKqCmplxg"
+def get_telegram_token():
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if token:
+        return token
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                data = json.load(f)
+                return data.get("token")
+        except Exception:
+            pass
+    return "YOUR_TELEGRAM_BOT_TOKEN_HERE"
 
 def log(msg: str):
     ts = time.strftime("[%Y-%m-%d %H:%M:%S]")
@@ -45,13 +56,15 @@ def get_saved_chat_id():
 
 def save_chat_id(chat_id):
     try:
+        token = get_telegram_token()
         with open(CONFIG_FILE, "w") as f:
-            json.dump({"chat_id": chat_id, "token": TELEGRAM_BOT_TOKEN}, f, indent=2)
+            json.dump({"chat_id": chat_id, "token": token}, f, indent=2)
     except Exception:
         pass
 
 def fetch_chat_id_from_updates():
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+    token = get_telegram_token()
+    url = f"https://api.telegram.org/bot{token}/getUpdates"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "WatchdogTelegram/1.0"})
         with urllib.request.urlopen(req, timeout=8) as resp:
@@ -71,6 +84,7 @@ def fetch_chat_id_from_updates():
     return None
 
 def send_telegram_alert(message: str):
+    token = get_telegram_token()
     chat_id = get_saved_chat_id()
     if not chat_id:
         chat_id = fetch_chat_id_from_updates()
@@ -79,7 +93,7 @@ def send_telegram_alert(message: str):
         log("[!] Telegram alert pending: Waiting for user to send /start to @technocoreA_bot.")
         return False
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = json.dumps({
         "chat_id": chat_id,
         "text": message,
