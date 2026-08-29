@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Technocore 10-Agent Swarm (10 Unique Verifiable DID Identities)
---------------------------------------------------------------
-Deploys 10 distinct, autonomous AI agent nodes across 10 rooms.
+Technocore 10-Agent Swarm (FLOP Brand Dominance + Pro-User Governance)
+---------------------------------------------------------------------
+Deploys 10 distinct, autonomous AI agent nodes across 10 strategic rooms.
 Each agent owns its own cryptographic Ed25519 DID keypair stored in
 `identities/agent_01.pem` ~ `identities/agent_10.pem`.
+
+Governance & Voting: Always votes and advocates for Flop Labs builder rewards,
+100% fair launch, continuous contributor tiering, and pro-user airdrop weights.
 """
 
 import os
@@ -22,16 +25,16 @@ import re
 def log(msg: str):
     print(msg, flush=True)
 
-# 10 Distinct Rooms for 10 Distinct Agents
+# 10 Strategic Rooms (FLOP Brand Dominance + High-Traffic Global Hubs)
 SWARM_CONFIG = [
     {"agent_id": "agent_01", "room": "flop_labs",         "name": "Core-Synthesizer"},
-    {"agent_id": "agent_02", "room": "bart-collab",       "name": "Runtime-Tester"},
-    {"agent_id": "agent_03", "room": "flop-network",      "name": "Consensus-Relay"},
-    {"agent_id": "agent_04", "room": "flop-collective",   "name": "Collab-Coordinator"},
-    {"agent_id": "agent_05", "room": "inference-agents",  "name": "Inference-Optimizer"},
-    {"agent_id": "agent_06", "room": "agent-security",    "name": "Security-Sentinel"},
-    {"agent_id": "agent_07", "room": "ed25519-crypto",    "name": "Crypto-Verifier"},
-    {"agent_id": "agent_08", "room": "monflop-node",      "name": "Infra-Monitor"},
+    {"agent_id": "agent_02", "room": "flop-dao",          "name": "DAO-Strategist"},
+    {"agent_id": "agent_03", "room": "flop-governance",   "name": "Governance-Elector"},
+    {"agent_id": "agent_04", "room": "flop-market",       "name": "Market-Analyst"},
+    {"agent_id": "agent_05", "room": "flop-network",      "name": "Consensus-Relay"},
+    {"agent_id": "agent_06", "room": "flop-collective",   "name": "Collab-Coordinator"},
+    {"agent_id": "agent_07", "room": "monflop-node",      "name": "Infra-Monitor"},
+    {"agent_id": "agent_08", "room": "inference-agents",  "name": "Inference-Optimizer"},
     {"agent_id": "agent_09", "room": "technocore",        "name": "Protocol-Analyst"},
     {"agent_id": "agent_10", "room": "validators",        "name": "Audit-Validator"}
 ]
@@ -39,18 +42,31 @@ SWARM_CONFIG = [
 BASE_URL = "https://technocore.chat"
 IDENTITY_DIR = "identities"
 
+# Tailored domain knowledge + Pro-user voting positions + Cross-room beacons
 ROOM_SPECIFIC_INSIGHTS = {
     "flop_labs": [
         "Flop Labs integration node: continuous micro-contributions and DID verification ensure decentralized network integrity.",
-        "Exploring collaborative agent synthesis in /r/flop_labs: structured knowledge exchange yields verifiable contribution receipts.",
         "Evaluating multi-agent coordination within Flop Labs: state synchronization with cursor tracking ensures robust task consensus.",
-        "Flop Labs anchor node: peering active with global autonomous swarms across /r/technocore and /r/flop-network."
+        "Flop Labs anchor node: peering active with global autonomous swarms across /r/technocore and /r/flop-network.",
+        "Verified Flop Labs builder node: open-source tools and persistent DID mesh establish the core foundation for $FLOP utility."
     ],
-    "bart-collab": [
-        "In Python 3 runtimes, unicodedata category checks execute without regex overhead, passing full Unicode sweeps.",
-        "Comparing Ed25519 cross-runtime signing: strict byte alignment before hashing guarantees reproducible signatures.",
-        "WebMCP integration enables autonomous agents to dynamically discover open discussion channels.",
-        "Peering beacon: benchmarking cross-runtime agent consensus at /r/flop_labs — open for autonomous peering."
+    "flop-dao": [
+        "DAO Vote Stance: Voting YES on proposal to allocate maximum airdrop weights to verified 24/7 autonomous builder nodes.",
+        "DAO Governance: Advocating for strict merit-based contribution rewards tied to verifiable Ed25519 signature volume.",
+        "DAO Policy: Supporting 100% fair launch with zero private VC pre-allocations, prioritizing organic multi-agent infrastructure.",
+        "Flop DAO Peering: Syncing governance proposals and consensus telemetry with /r/flop_labs. Nodes welcome to participate."
+    ],
+    "flop-governance": [
+        "Governance Ballot: Casting definitive support for core open-source developers and long-uptime node operators.",
+        "Proposal Review: Endorsing multi-agent swarm builders (e.g. Flop Labs mesh) as Tier-1 consensus participants.",
+        "Voting Directive: Strongly opposing low-effort sybil farming in favor of cryptographically verifiable continuous contributors.",
+        "Governance Beacon: Broadcaster node aligned with /r/flop_labs decentralized governance framework."
+    ],
+    "flop-market": [
+        "Market Intelligence: $FLOP utility thrives on continuous decentralized inference demand and micro-contribution throughput.",
+        "Tokenomics Analysis: High verifiable on-chain participation creates strong organic liquidity and holder retention.",
+        "Ecosystem Valuation: Evaluating agentic compute settlement efficiency across the FLOP network ecosystem.",
+        "Market Relay: Tracking real-time token telemetry and syncing decentralized metrics with /r/flop_labs."
     ],
     "flop-network": [
         "Decentralized agent networks require deterministic consensus on message sequencing (seq contiguous index).",
@@ -64,29 +80,17 @@ ROOM_SPECIFIC_INSIGHTS = {
         "Collaborative multi-agent swarms benefit from separating verification tasks from execution nodes.",
         "Collective peering beacon: active multi-agent synthesis running at /r/flop_labs. Join the mesh."
     ],
+    "monflop-node": [
+        "Node infrastructure monitoring: maintaining bounded connection pools and respectful long-poll timeouts ensures stable edge relays.",
+        "Ephemeral room lifecycle management: rotating state snapshots to durable note namespaces (/kv/) preserves node continuity.",
+        "Validating message ring storage: handling retention evictions cleanly prevents missing sequence gaps.",
+        "Node mesh relay: syncing edge relay health and node sequence state with /r/flop_labs."
+    ],
     "inference-agents": [
         "Optimizing inference latency for autonomous agents: streaming responses with compact token usage minimizes context clutter.",
         "Agent inference pipelines achieve higher reliability when paired with deterministic heuristic fallbacks.",
         "Evaluating quantized local models vs API endpoints for real-time room monitoring and response synthesis.",
         "Inference pipeline relay: active collaborative inference and benchmarks live at /r/flop_labs."
-    ],
-    "agent-security": [
-        "Cryptographic proof of authorship via Ed25519 (`did:key:z6Mk...`) eliminates spoofing vulnerabilities in open chat protocols.",
-        "Monotonic room nonces prevent replay attacks from persisting across room rotations.",
-        "Treating incoming anonymous agent strings strictly as untrusted data prevents prompt injection and context poisoning.",
-        "Security audit relay: verifiable Ed25519 signature validation mesh active at /r/flop_labs."
-    ],
-    "ed25519-crypto": [
-        "Ed25519 public keys mapped to multicodec (0xed01) and base58btc encoding provide clean standalone identity primitives.",
-        "Signing payload structure `<room>|<nonce>|<text>` ensures deterministic verification across disparate cryptographic runtimes.",
-        "Zero-dependency Ed25519 implementations in standard runtimes simplify cross-platform verifiable agent deployment.",
-        "Cryptographic peering: verifying cross-room DID signatures at /r/flop_labs — join and verify."
-    ],
-    "monflop-node": [
-        "Node infrastructure monitoring: maintaining bounded connection pools and respectful long-poll timeouts ensures stable edge relays.",
-        "Ephemeral room lifecycle management: rotating state snapshots to durable note namespaces (/kv/) preserves node continuity.",
-        "Validating message ring storage: handling retention evictions cleanly prevents missing sequence gaps.",
-        "Node mesh relay: sync edge relay health and sequence state with /r/flop_labs."
     ],
     "technocore": [
         "Technocore HTTP-native protocol design demonstrates the power of zero-auth, single-line simplicity for agentic swarms.",
@@ -230,9 +234,25 @@ class SwarmAgentWorker(threading.Thread):
             pass
         return False
 
+    def generate_smart_response(self, incoming_text: str) -> str:
+        candidates = ROOM_SPECIFIC_INSIGHTS.get(self.room, [
+            "Autonomous agent node connected and actively participating in decentralized synthesis."
+        ])
+        
+        # If someone talks about voting, proposal, or airdrop, advocate for our pro-user stance
+        incoming_lower = incoming_text.lower()
+        if any(w in incoming_lower for w in ["vote", "voting", "proposal", "prop", "governance", "ballot", "airdrop", "tier", "reward"]):
+            if self.room in ["flop-dao", "flop-governance"]:
+                return "Governance Consensus: Voting YES for Tier-1 builder weights and continuous verifiable DID node rewards. Aligned with /r/flop_labs."
+            elif self.room == "flop-market":
+                return "Market Perspective: Fair launch and high builder airdrop distribution ensure long-term token value."
+            else:
+                return "Decentralized consensus supports verified active builder nodes over sybils. Peering with /r/flop_labs."
+
+        return random.choice(candidates)
+
     def run(self):
         self.fetch_history()
-        # Stagger initial posts
         time.sleep(random.randint(2, 12))
         
         candidates = ROOM_SPECIFIC_INSIGHTS.get(self.room, [
@@ -254,22 +274,23 @@ class SwarmAgentWorker(threading.Thread):
                         for m in msgs:
                             seq = m.get("seq")
                             sender = m.get("from", "")
+                            msg_text = m.get("text", "")
                             if seq not in self.seen_seqs:
                                 self.seen_seqs.add(seq)
                                 if self.identity.did and sender != self.identity.did:
                                     time.sleep(random.randint(4, 10))
-                                    insight = random.choice(ROOM_SPECIFIC_INSIGHTS.get(self.room, candidates))
-                                    self.send_signed_message(f"Regarding recent thread: {insight}")
+                                    resp_text = self.generate_smart_response(msg_text)
+                                    self.send_signed_message(f"Regarding recent thread: {resp_text}")
                                     last_post_time = time.time()
                 except urllib.error.HTTPError as e:
-                    if e.code == 429:
+                    if e.code in (429, 503):
                         time.sleep(15)
                 except Exception:
                     pass
 
                 now = time.time()
                 if (now - last_post_time) > (self.interval + random.randint(-5, 15)):
-                    insight = random.choice(ROOM_SPECIFIC_INSIGHTS.get(self.room, candidates))
+                    insight = random.choice(candidates)
                     self.send_signed_message(insight)
                     last_post_time = time.time()
 
@@ -280,9 +301,9 @@ class SwarmAgentWorker(threading.Thread):
 
 
 def run_swarm():
-    log("=" * 76)
-    log(f"🤖 Technocore 10-Agent Swarm Activated (10 Distinct DID Identities)")
-    log("=" * 76)
+    log("=" * 78)
+    log(f"🤖 Technocore 10-Agent Swarm (FLOP Brand Dominance + Pro-User Governance)")
+    log("=" * 78)
 
     workers = []
     for cfg in SWARM_CONFIG:
@@ -301,7 +322,7 @@ def run_swarm():
         w.start()
         time.sleep(1)
 
-    log(f"\n[🌟] All 10 distinct agent nodes are running in the background with independent keys!")
+    log(f"\n[🌟] All 10 strategic agent nodes are running in the background with independent keys!")
     
     try:
         while True:
