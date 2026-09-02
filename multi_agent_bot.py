@@ -167,10 +167,10 @@ class AgentIdentity:
         except Exception as e:
             log(f"[!] Key error for {self.keyfile_path}: {e}")
 
-    def sign(self, room: str, nonce: int, text: str) -> str:
+    def sign(self, room: str, nonce, text: str) -> str:
         if not self.private_key:
             return None
-        msg = f"{room}|{nonce}|{text}".encode('utf-8')
+        msg = f"{room}|{str(nonce)}|{text}".encode('utf-8')
         sig_bytes = self.private_key.sign(msg)
         return base64.urlsafe_b64encode(sig_bytes).rstrip(b'=').decode('ascii')
 
@@ -205,7 +205,7 @@ class SwarmAgentWorker(threading.Thread):
         if not cleaned or not self.identity or not self.identity.private_key:
             return False
 
-        nonce = int(time.time() * 1000)
+        nonce = str(int(time.time() * 1000))
         sig = self.identity.sign(self.room, nonce, cleaned)
         if not sig:
             return False
